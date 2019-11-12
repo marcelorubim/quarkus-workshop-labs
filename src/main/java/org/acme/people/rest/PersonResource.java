@@ -1,12 +1,17 @@
 package org.acme.people.rest;
 
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CompletionStage;
+import java.util.stream.Collectors;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
+import javax.inject.Inject;
 import javax.transaction.Transactional;
 import javax.ws.rs.GET;
+import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
@@ -16,6 +21,8 @@ import javax.ws.rs.core.MediaType;
 import org.acme.people.model.DataTable;
 import org.acme.people.model.EyeColor;
 import org.acme.people.model.Person;
+import org.acme.people.model.StarWarsPerson;
+import org.acme.people.service.StarWarsService;
 import org.acme.people.utils.CuteNameGenerator;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.media.Content;
@@ -23,15 +30,56 @@ import org.eclipse.microprofile.openapi.annotations.media.Schema;
 import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import io.quarkus.hibernate.orm.panache.PanacheQuery;
 import io.quarkus.panache.common.Parameters;
 import io.quarkus.runtime.StartupEvent;
+import io.vertx.axle.core.eventbus.EventBus;
+import io.vertx.axle.core.eventbus.Message;
 
 @Path("/person")
 @ApplicationScoped
 public class PersonResource {
     
+    
+
+    @Inject
+    @RestClient
+    StarWarsService swService; 
+    
+    @GET
+    @Path("/swpeople")
+    @Produces(MediaType.APPLICATION_JSON)
+    public List<StarWarsPerson> getCharacters() {
+        return Arrays.stream(new int[] {1, 2, 3, 4, 5}) 
+            .mapToObj(swService::getPerson)  
+            .collect(Collectors.toList());  
+    }
+
+
+
+    @Inject EventBus bus; 
+
+
+
+    @POST
+    @Path("/{name}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public CompletionStage<String> addPerson(@PathParam("name") String name) {
+        return bus.<String>send("add-person", name) 
+          .thenApply(Message::body); 
+    }
+
+
+    @GET
+    @Path("/name/{name}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Person byName(@PathParam("name") String name) {
+        return Person.find("name", name).firstResult();
+    }
+
+
 
     @Transactional
     void onStart(@Observes StartupEvent ev) {
